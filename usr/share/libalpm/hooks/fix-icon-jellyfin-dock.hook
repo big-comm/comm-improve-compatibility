@@ -1,0 +1,12 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = jellyfin-media-player
+Target = comm-improve-compatibility
+
+[Action]
+Description = Fix the .desktop file name of the jellyfin-media-player app
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/fix-icon-jellyfin-dock
+NeedsTargets

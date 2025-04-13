@@ -1,0 +1,13 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = lightdm-slick-greeter
+Target = comm-xfce-config
+Target = comm-cinnamon-config
+
+[Action]
+Description = Change the default wallpaper of lightdm-slick-greeter
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/change-wallpaper-slick-greeter
+NeedsTargets

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+fileIn="/usr/share/applications/com.github.iwalton3.jellyfin-media-player.desktop"
+fileOut="/usr/share/applications/jellyfinmediaplayer.desktop"
+
+# Check if $fileIn exists
+if [ -f "$fileIn" ]; then
+    # If it exists, create a backup
+    cp -f "$fileIn" "$fileIn.bak"
+    
+    # Move the file only if it exists
+    mv -f "$fileIn" "$fileOut"
+    echo "File "$fileOut" Jellyfin renamed successfully."
+else
+    # If file doesn't exist, exit gracefully
+    echo "File $fileIn not found. Skipping this step."
+    exit 0  # Exit with success code so the package installation continues
+fi
