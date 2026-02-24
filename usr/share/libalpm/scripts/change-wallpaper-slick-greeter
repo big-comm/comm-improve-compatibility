@@ -1,36 +1,98 @@
 #!/bin/bash
 
-# Config file path
+# Sync slick-greeter background with the user's desktop wallpaper.
+# This avoids the visible transition between different wallpapers on the login screen.
+
 configFile="/etc/lightdm/slick-greeter.conf"
 
-# Original and new wallpaper paths
-originalWallpaper="/usr/share/slick-greeter/slick-greeter.png"
-newWallpaper="/usr/share/backgrounds/community/lightdm-default.jpg"
+# Try to read a user's desktop wallpaper from dconf
+get_user_wallpaper() {
+    local user="$1"
+    local wallpaper=""
 
-# Check if config file exists
+    # Try Cinnamon
+    wallpaper=$(runuser -l "$user" -c "dconf read /org/cinnamon/desktop/background/picture-uri" 2>/dev/null | tr -d "'" | sed 's|^file://||')
+
+    # Try GNOME/Budgie
+    [ -z "$wallpaper" ] && wallpaper=$(runuser -l "$user" -c "dconf read /org/gnome/desktop/background/picture-uri" 2>/dev/null | tr -d "'" | sed 's|^file://||')
+
+    # Try MATE
+    [ -z "$wallpaper" ] && wallpaper=$(runuser -l "$user" -c "dconf read /org/mate/desktop/background/picture-filename" 2>/dev/null | tr -d "'")
+
+    # Try XFCE (read from config file directly)
+    if [ -z "$wallpaper" ]; then
+        local userHome
+        userHome=$(getent passwd "$user" | cut -d: -f6)
+        local xfceConfig="$userHome/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
+        if [ -f "$xfceConfig" ]; then
+            wallpaper=$(grep -oP 'name="last-image"[^>]*value="\K[^"]+' "$xfceConfig" | head -1)
+        fi
+    fi
+
+    if [ -n "$wallpaper" ] && [ -f "$wallpaper" ]; then
+        echo "$wallpaper"
+        return 0
+    fi
+    return 1
+}
+
+# Find the best wallpaper: user's current > DE default > fallback
+find_best_wallpaper() {
+    local wallpaper=""
+
+    # Try to read wallpaper from the first regular user (UID >= 1000)
+    while IFS=: read -r user _ uid _ _ userHome _; do
+        if [ "$uid" -ge 1000 ] && [ "$uid" -lt 65534 ] && [ -d "$userHome" ]; then
+            wallpaper=$(get_user_wallpaper "$user")
+            if [ -n "$wallpaper" ]; then
+                echo "$wallpaper"
+                return 0
+            fi
+        fi
+    done < /etc/passwd
+
+    # Fallback: use DE-specific default wallpaper
+    if pacman -Q comm-cinnamon-config &>/dev/null; then
+        for f in /usr/share/backgrounds/community/default-cinnamon.jpg \
+                 /usr/share/backgrounds/community/default.jpg; do
+            [ -f "$f" ] && echo "$f" && return 0
+        done
+    fi
+
+    if pacman -Q comm-xfce-config &>/dev/null; then
+        for f in /usr/share/backgrounds/community/default-xfce.jpg \
+                 /usr/share/backgrounds/community/default.jpg; do
+            [ -f "$f" ] && echo "$f" && return 0
+        done
+    fi
+
+    # Final fallback
+    local fallback="/usr/share/backgrounds/community/lightdm-default.jpg"
+    [ -f "$fallback" ] && echo "$fallback" && return 0
+
+    return 1
+}
+
+newWallpaper=$(find_best_wallpaper)
+
+if [ -z "$newWallpaper" ]; then
+    exit 0
+fi
+
+# Update slick-greeter configuration
 if [ -f "$configFile" ]; then
-   # Make backup of original config if doesn't exist
-   if [ ! -f "${configFile}.bak" ]; then
-       cp "$configFile" "${configFile}.bak"
-   fi
-
-   # Make backup of original wallpaper if doesn't exist
-   if [ -f "$originalWallpaper" ] && [ ! -f "${originalWallpaper}.bak" ]; then
-       cp "$originalWallpaper" "${originalWallpaper}.bak"
-   fi
-
-   # Update configuration
-   if [ -f "$newWallpaper" ]; then
-       # If file exists, update only background path
-       sed -i "s|^background=.*|background=$newWallpaper|" "$configFile"
-   else
-       echo "Error: New wallpaper not found in $newWallpaper"
-       exit 1
-   fi
+    # Make backup of original config if doesn't exist
+    if [ ! -f "${configFile}.bak" ]; then
+        cp "$configFile" "${configFile}.bak"
+    fi
+    if grep -q "^background=" "$configFile"; then
+        sed -i "s|^background=.*|background=$newWallpaper|" "$configFile"
+    else
+        echo "background=$newWallpaper" >> "$configFile"
+    fi
 else
-   # If file doesn't exist, create with correct configuration
-   echo "[Greeter]" > "$configFile"
-   echo "background=$newWallpaper" >> "$configFile"
+    echo "[Greeter]" > "$configFile"
+    echo "background=$newWallpaper" >> "$configFile"
 fi
 
 exit 0
