@@ -1,2 +1,6 @@
 #!/bin/bash
-/usr/bin/fastfetch --file /etc/fastfetch/ascii-art "$@"
+if [[ -f "$HOME/.config/fastfetch/ascii-art" ]]; then
+    /usr/bin/fastfetch --file "$HOME/.config/fastfetch/ascii-art" "$@"
+else
+    /usr/bin/fastfetch --file /etc/fastfetch/ascii-art "$@"
+fi
