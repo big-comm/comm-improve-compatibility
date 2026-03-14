@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# Sync the user's desktop wallpaper to slick-greeter background.
+# Runs as root via lightdm display-setup-script BEFORE the greeter loads.
+# This ensures the login screen always shows the user's current wallpaper
+# without a visible transition.
+
+configFile="/etc/lightdm/slick-greeter.conf"
+
+# Read a user's desktop wallpaper from dconf/config
+get_user_wallpaper() {
+    local user="$1"
+    local wallpaper=""
+
+    # Try Cinnamon
+    wallpaper=$(runuser -l "$user" -c "dconf read /org/cinnamon/desktop/background/picture-uri" 2>/dev/null | tr -d "'" | sed 's|^file://||')
+
+    # Try GNOME/Budgie
+    [ -z "$wallpaper" ] && wallpaper=$(runuser -l "$user" -c "dconf read /org/gnome/desktop/background/picture-uri" 2>/dev/null | tr -d "'" | sed 's|^file://||')
+
+    # Try MATE
+    [ -z "$wallpaper" ] && wallpaper=$(runuser -l "$user" -c "dconf read /org/mate/desktop/background/picture-filename" 2>/dev/null | tr -d "'")
+
+    # Try XFCE (read from config file directly)
+    if [ -z "$wallpaper" ]; then
+        local userHome
+        userHome=$(getent passwd "$user" | cut -d: -f6)
+        local xfceConfig="$userHome/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
+        if [ -f "$xfceConfig" ]; then
+            wallpaper=$(grep -oP 'name="last-image"[^>]*value="\K[^"]+' "$xfceConfig" | head -1)
+        fi
+    fi
+
+    if [ -n "$wallpaper" ] && [ -f "$wallpaper" ]; then
+        echo "$wallpaper"
+        return 0
+    fi
+    return 1
+}
+
+# Find wallpaper from regular users (UID >= 1000)
+wallpaper=""
+while IFS=: read -r user _ uid _ _ userHome _; do
+    if [ "$uid" -ge 1000 ] && [ "$uid" -lt 65534 ] && [ -d "$userHome" ]; then
+        wallpaper=$(get_user_wallpaper "$user")
+        if [ -n "$wallpaper" ]; then
+            break
+        fi
+    fi
+done < /etc/passwd
+
+# Nothing to do if no wallpaper found
+if [ -z "$wallpaper" ] || [ ! -f "$wallpaper" ]; then
+    exit 0
+fi
+
+# Skip if already in sync
+if [ -f "$configFile" ]; then
+    currentBg=$(grep "^background=" "$configFile" | cut -d= -f2)
+    if [ "$currentBg" = "$wallpaper" ]; then
+        exit 0
+    fi
+fi
+
+# Update slick-greeter.conf
+if [ -f "$configFile" ]; then
+    if grep -q "^background=" "$configFile"; then
+        sed -i "s|^background=.*|background=$wallpaper|" "$configFile"
+    else
+        echo "background=$wallpaper" >> "$configFile"
+    fi
+else
+    echo "[Greeter]" > "$configFile"
+    echo "background=$wallpaper" >> "$configFile"
+fi
+
+exit 0
+
+exit 0
