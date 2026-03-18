@@ -1,6 +1,6 @@
 #!/bin/bash
 if [[ -f "$HOME/.config/fastfetch/ascii-art" ]]; then
-    /usr/bin/fastfetch --file-raw "$HOME/.config/fastfetch/ascii-art" "$@"
+    /usr/bin/fastfetch --key-width 15 --file-raw "$HOME/.config/fastfetch/ascii-art" "$@"
 else
-    /usr/bin/fastfetch --file-raw /etc/fastfetch/ascii-art "$@"
+    /usr/bin/fastfetch --key-width 15 --file-raw /etc/fastfetch/ascii-art "$@"
 fi
