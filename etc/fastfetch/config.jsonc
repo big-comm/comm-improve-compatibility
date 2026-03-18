@@ -2,7 +2,7 @@
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
   "logo": {
     "type": "file-raw",
-    "source": "~/.config/fastfetch/ascii-art",
+    "source": "/etc/fastfetch/ascii-art",
     "padding": {
       "top": 0,
       "left": 2,
@@ -23,90 +23,88 @@
     "separator",
     {
       "type": "os",
-      "key": "{icon} Sistema    ",
+      "key": "{icon} Sistema",
       "keyColor": "blue",
       "format": "{pretty-name} {arch}"
     },
     {
       "type": "kernel",
-      "key": "│ ├ Kernel    ",
+      "key": "│ ├ Kernel",
       "keyColor": "blue",
       "format": "{release}"
     },
     {
       "type": "uptime",
-      "key": "│ ├󰅐 Uptime  ",
+      "key": "│ ├󰅐 Uptime",
       "keyColor": "blue"
     },
     {
       "type": "packages",
-      "key": "│ ├󰏖 Pacotes ",
+      "key": "│ ├󰏖 Pacotes",
       "keyColor": "blue"
     },
     {
       "type": "shell",
-      "key": "│ └ Shell     ",
+      "key": "│ └ Shell",
       "keyColor": "blue"
     },
     {
       "type": "de",
-      "key": "󰇄 Desktop    ",
+      "key": "󰇄 Desktop",
       "keyColor": "cyan"
     },
     {
       "type": "wm",
-      "key": "│ ├ WM        ",
+      "key": "│ ├ WM",
       "keyColor": "cyan"
     },
     {
       "type": "theme",
-      "key": "│ ├󰉼 Tema    ",
-      "keyColor": "cyan",
-      "format": "{theme1}"
+      "key": "│ ├󰉼 Tema",
+      "keyColor": "cyan"
     },
     {
       "type": "icons",
-      "key": "│ ├󰀻 Ícones  ",
-      "keyColor": "cyan",
-      "format": "{icons1}"
+      "key": "│ ├󰀻 Ícones",
+      "keyColor": "cyan"
     },
     {
       "type": "terminal",
-      "key": "│ └ Terminal  ",
+      "key": "│ └ Terminal",
       "keyColor": "cyan",
       "format": "{pretty-name} {version}"
     },
     {
       "type": "host",
-      "key": "󰌢 Hardware   ",
+      "key": "󰌢 Hardware",
       "keyColor": "magenta",
       "format": "{name}"
     },
     {
       "type": "cpu",
-      "key": "│ ├󰻠 CPU     ",
+      "key": "│ ├󰻠 CPU",
       "keyColor": "magenta",
       "format": "{name} ({cores-logical}) @ {freq-base}"
     },
     {
       "type": "gpu",
-      "key": "│ ├󰍛 GPU     ",
+      "key": "│ ├󰍛 GPU",
       "keyColor": "magenta"
     },
     {
       "type": "memory",
-      "key": "│ ├ RAM       ",
+      "key": "│ ├ RAM",
       "keyColor": "magenta"
     },
     {
       "type": "disk",
-      "key": "│ ├ Disco     ",
+      "key": "│ ├ Disco",
       "keyColor": "magenta",
       "folders": "/"
     },
     {
       "type": "display",
-      "key": "│ └󰍹 Tela    ",
+      "key": "│ └󰍹 Tela",
       "keyColor": "magenta"
     },
     "break",
