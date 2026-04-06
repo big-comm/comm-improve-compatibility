@@ -27,7 +27,27 @@ get_user_wallpaper() {
         userHome=$(getent passwd "$user" | cut -d: -f6)
         local xfceConfig="$userHome/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
         if [ -f "$xfceConfig" ]; then
-            wallpaper=$(grep -oP 'name="last-image"[^>]*value="\K[^"]+' "$xfceConfig" | head -1)
+            # Try to find the active monitor's wallpaper using xrandr
+            # (display-setup-script runs after X starts, so xrandr is available)
+            local activeMonitor
+            activeMonitor=$(xrandr --query 2>/dev/null | grep ' connected' | head -1 | awk '{print $1}')
+            if [ -n "$activeMonitor" ]; then
+                wallpaper=$(awk -v mon="monitor${activeMonitor}" '
+                    $0 ~ "name=\"" mon "\"" { found=1 }
+                    found && /name="last-image"/ {
+                        match($0, /value="([^"]+)"/, arr)
+                        if (arr[1] != "") { print arr[1]; exit }
+                    }
+                    found && /name="monitor/ && $0 !~ "name=\"" mon "\"" { exit }
+                ' "$xfceConfig")
+            fi
+            # Fallback: the skel ships many monitor entries with the default wallpaper;
+            # only the active monitor gets updated when the user changes it.
+            # Pick the least common last-image value (the user's actual wallpaper).
+            if [ -z "$wallpaper" ] || [ ! -f "$wallpaper" ]; then
+                wallpaper=$(grep -oP 'name="last-image"[^>]*value="\K[^"]+' "$xfceConfig" \
+                    | sort | uniq -c | sort -n | head -1 | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//')
+            fi
         fi
     fi
 
