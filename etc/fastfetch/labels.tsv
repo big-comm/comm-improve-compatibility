@@ -1,0 +1,28 @@
+# lang	system	kernel	uptime	packages	shell	desktop	theme	icons	terminal	hardware	disk	display
+bg	Система	Ядро	Време на работа	Пакети	Обвивка	Работна среда	Тема	Икони	Терминал	Хардуер	Диск	Дисплей
+cs	Systém	Jádro	Doba běhu	Balíčky	Shell	Plocha	Motiv	Ikony	Terminál	Hardware	Disk	Displej
+da	System	Kerne	Oppetid	Pakker	Skal	Skrivebord	Tema	Ikoner	Terminal	Hardware	Disk	Skærm
+de	System	Kernel	Betriebszeit	Pakete	Shell	Desktop	Thema	Symbole	Terminal	Hardware	Datenträger	Anzeige
+el	Σύστημα	Πυρήνας	Χρόνος λειτουργίας	Πακέτα	Κέλυφος	Επιφάνεια εργασίας	Θέμα	Εικονίδια	Τερματικό	Υλικό	Δίσκος	Οθόνη
+es	Sistema	Núcleo	Tiempo activo	Paquetes	Shell	Escritorio	Tema	Iconos	Terminal	Hardware	Disco	Pantalla
+et	Süsteem	Tuum	Tööaeg	Paketid	Kest	Töölaud	Teema	Ikoonid	Terminal	Riistvara	Ketas	Ekraan
+fi	Järjestelmä	Ydin	Käyttöaika	Paketit	Kuori	Työpöytä	Teema	Kuvakkeet	Pääte	Laitteisto	Levy	Näyttö
+fr	Système	Noyau	Durée de fonctionnement	Paquets	Shell	Bureau	Thème	Icônes	Terminal	Matériel	Disque	Affichage
+he	מערכת	ליבה	זמן פעולה	חבילות	מעטפת	שולחן עבודה	ערכת נושא	סמלים	מסוף	חומרה	דיסק	תצוגה
+hr	Sustav	Jezgra	Vrijeme rada	Paketi	Ljuska	Radna površina	Tema	Ikone	Terminal	Hardver	Disk	Zaslon
+hu	Rendszer	Rendszermag	Üzemidő	Csomagok	Parancsértelmező	Asztal	Téma	Ikonok	Terminál	Hardver	Lemez	Kijelző
+is	Kerfi	Kjarni	Gangtími	Pakkar	Skel	Skjáborð	Þema	Tákn	Útstöð	Vélbúnaður	Diskur	Skjár
+it	Sistema	Kernel	Tempo di attività	Pacchetti	Shell	Desktop	Tema	Icone	Terminale	Hardware	Disco	Schermo
+ja	システム	カーネル	稼働時間	パッケージ	シェル	デスクトップ	テーマ	アイコン	端末	ハードウェア	ディスク	ディスプレイ
+ko	시스템	커널	가동 시간	패키지	셸	데스크톱	테마	아이콘	터미널	하드웨어	디스크	디스플레이
+nl	Systeem	Kernel	Bedrijfstijd	Pakketten	Shell	Bureaublad	Thema	Pictogrammen	Terminal	Hardware	Schijf	Beeldscherm
+no	System	Kjerne	Oppetid	Pakker	Skall	Skrivebord	Tema	Ikoner	Terminal	Maskinvare	Disk	Skjerm
+pl	System	Jądro	Czas działania	Pakiety	Powłoka	Pulpit	Motyw	Ikony	Terminal	Sprzęt	Dysk	Ekran
+pt	Sistema	Kernel	Uptime	Pacotes	Shell	Desktop	Tema	Ícones	Terminal	Hardware	Disco	Tela
+ro	Sistem	Nucleu	Timp de funcționare	Pachete	Shell	Desktop	Temă	Pictograme	Terminal	Hardware	Disc	Afișaj
+ru	Система	Ядро	Время работы	Пакеты	Оболочка	Рабочий стол	Тема	Значки	Терминал	Оборудование	Диск	Дисплей
+sk	Systém	Jadro	Doba behu	Balíky	Shell	Pracovná plocha	Téma	Ikony	Terminál	Hardvér	Disk	Displej
+sv	System	Kärna	Upptid	Paket	Skal	Skrivbord	Tema	Ikoner	Terminal	Hårdvara	Disk	Skärm
+tr	Sistem	Çekirdek	Çalışma süresi	Paketler	Kabuk	Masaüstü	Tema	Simgeler	Uçbirim	Donanım	Disk	Ekran
+uk	Система	Ядро	Час роботи	Пакунки	Оболонка	Робочий стіл	Тема	Піктограми	Термінал	Обладнання	Диск	Дисплей
+zh	系统	内核	运行时间	软件包	外壳	桌面	主题	图标	终端	硬件	磁盘	显示器

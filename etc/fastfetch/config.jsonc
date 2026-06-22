@@ -23,7 +23,7 @@
     "separator",
     {
       "type": "os",
-      "key": "{icon} Sistema",
+      "key": "{icon} System",
       "keyColor": "blue",
       "format": "{pretty-name} {arch}"
     },
@@ -40,7 +40,7 @@
     },
     {
       "type": "packages",
-      "key": "│ ├󰏖 Pacotes",
+      "key": "│ ├󰏖 Packages",
       "keyColor": "blue"
     },
     {
@@ -60,12 +60,12 @@
     },
     {
       "type": "theme",
-      "key": "│ ├󰉼 Tema",
+      "key": "│ ├󰉼 Theme",
       "keyColor": "cyan"
     },
     {
       "type": "icons",
-      "key": "│ ├󰀻 Ícones",
+      "key": "│ ├󰀻 Icons",
       "keyColor": "cyan"
     },
     {
@@ -98,13 +98,13 @@
     },
     {
       "type": "disk",
-      "key": "│ ├ Disco",
+      "key": "│ ├ Disk",
       "keyColor": "magenta",
       "folders": "/"
     },
     {
       "type": "display",
-      "key": "│ └󰍹 Tela",
+      "key": "│ └󰍹 Display",
       "keyColor": "magenta"
     },
     "break",
