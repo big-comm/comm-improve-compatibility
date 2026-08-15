@@ -1,6 +1,59 @@
 #!/bin/bash
-if [[ -f "$HOME/.config/fastfetch/ascii-art" ]]; then
-    /usr/bin/fastfetch --key-width 15 --file-raw "$HOME/.config/fastfetch/ascii-art" "$@"
-else
-    /usr/bin/fastfetch --key-width 15 --file-raw /etc/fastfetch/ascii-art "$@"
+# Wrapper do fastfetch da BigCommunity.
+#
+#  - usa o ASCII art da distro (o do usuário, se existir);
+#  - traduz os rótulos dos módulos para o idioma do usuário, conforme
+#    /etc/fastfetch/labels.tsv, com fallback para inglês.
+#
+# O config traduzido é gerado em cache e só é refeito quando o config de
+# origem ou a tabela de rótulos mudam.
+
+readonly SYS_DIR='/etc/fastfetch'
+readonly LABELS="$SYS_DIR/labels.tsv"
+readonly TRANSLATOR="$SYS_DIR/translate-labels.awk"
+
+ascii="$HOME/.config/fastfetch/ascii-art"
+[[ -f $ascii ]] || ascii="$SYS_DIR/ascii-art"
+
+config="$HOME/.config/fastfetch/config.jsonc"
+[[ -f $config ]] || config="$SYS_DIR/config.jsonc"
+
+# Idioma do usuário: pt_BR.UTF-8 -> pt. Sem locale definido, inglês.
+lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+lang="${lang%%.*}"
+lang="${lang%%@*}"
+lang="${lang%%_*}"
+lang="${lang,,}"
+[[ -z $lang || $lang == c || $lang == posix ]] && lang='en'
+
+translate() {
+    local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/fastfetch"
+    local out="$cache_dir/config.$lang.jsonc"
+
+    [[ -f $LABELS && -f $TRANSLATOR && -f $config ]] || return 1
+
+    if [[ -s $out && ! $config -nt $out && ! $LABELS -nt $out ]]; then
+        printf '%s' "$out"
+        return 0
+    fi
+
+    mkdir -p "$cache_dir" 2>/dev/null || return 1
+    local tmp
+    tmp=$(mktemp "$out.XXXXXX" 2>/dev/null) || return 1
+
+    if awk -v lang="$lang" -f "$TRANSLATOR" "$LABELS" "$config" >"$tmp" &&
+        [[ -s $tmp ]] && mv -f "$tmp" "$out"; then
+        printf '%s' "$out"
+        return 0
+    fi
+
+    rm -f "$tmp"
+    return 1
+}
+
+if translated=$(translate); then
+    exec /usr/bin/fastfetch --config "$translated" --file-raw "$ascii" "$@"
 fi
+
+# Fallback: config original, sem tradução.
+exec /usr/bin/fastfetch --key-width 15 --config "$config" --file-raw "$ascii" "$@"
