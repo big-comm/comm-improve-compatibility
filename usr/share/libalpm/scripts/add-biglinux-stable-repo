@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+
+# Add the BigLinux stable repository to pacman.conf when it is missing.
+#
+# BigCommunity ISOs built from March 2026 shipped without the section: the
+# profile stopped carrying [biglinux-stable] on the understanding that the ISO
+# engine wrote it, and the engine only ever wrote it into the build
+# configuration. Those systems run BigLinux packages with no repository to
+# update them from, and the installed images cannot be fixed retroactively --
+# only an upgrade reaches them, which is what this hook is for.
+#
+# Nothing here is destructive: an existing section is left exactly as it is, a
+# backup is kept, and the file is replaced atomically only after pacman itself
+# accepts the result.
+
+pacmanConf="${PACMAN_CONF:-/etc/pacman.conf}"
+repoName="biglinux-stable"
+# $arch is pacman's own variable and must reach the file unexpanded, so the
+# single quotes here are deliberate.
+# shellcheck disable=SC2016
+repoServer='https://repo.biglinux.com.br/stable/$arch'
+
+# Never fail the transaction: a package upgrade must not abort because this
+# convenience could not run.
+trap 'exit 0' ERR
+
+if [ ! -f "$pacmanConf" ]; then
+    echo "add-biglinux-stable-repo: $pacmanConf not found. Skipping."
+    exit 0
+fi
+
+# Already declared: nothing to do. Matching the section header anywhere in the
+# file keeps repeated upgrades idempotent.
+if grep -Eq "^[[:space:]]*\[${repoName}\]" "$pacmanConf"; then
+    exit 0
+fi
+
+# Declared but commented out means somebody disabled it deliberately. Adding it
+# back would override that decision silently, so say so and stop.
+if grep -Eq "^[[:space:]]*#+[[:space:]]*\[${repoName}\]" "$pacmanConf"; then
+    echo "add-biglinux-stable-repo: [${repoName}] is commented out in $pacmanConf; leaving it alone."
+    exit 0
+fi
+
+if [ ! -w "$pacmanConf" ]; then
+    echo "add-biglinux-stable-repo: $pacmanConf is not writable. Skipping."
+    exit 0
+fi
+
+# Write through a copy so a failure at any point leaves the original in place.
+# The copy lives in the same directory, so replacing it later is a rename on
+# one filesystem rather than a partially written file.
+workFile="$(mktemp "${pacmanConf}.biglinux-XXXXXX" 2>/dev/null)" || exit 0
+if ! cp -a "$pacmanConf" "$workFile" 2>/dev/null; then
+    rm -f "$workFile"
+    exit 0
+fi
+
+# A file whose last line has no newline would swallow the section header into
+# it, so close that line first.
+if [ -s "$workFile" ] && [ -n "$(tail -c 1 "$workFile")" ]; then
+    printf '\n' >>"$workFile"
+fi
+
+# A section glued to the previous one is still valid, but every other section in
+# this file is separated by a blank line; match that.
+if [ -n "$(tail -n 1 "$workFile")" ]; then
+    printf '\n' >>"$workFile"
+fi
+
+printf '[%s]\nSigLevel = PackageRequired\nServer = %s\n' "$repoName" "$repoServer" >>"$workFile"
+
+# Let pacman judge its own configuration before this file becomes the real one.
+#
+# What matters is whether this edit broke anything, not whether the file was
+# already perfect: a system whose pacman.conf pacman already complains about
+# (an undefined Architecture, a repository with no Server) is exactly the kind
+# of system that still needs the repository. So the original is judged too, and
+# only a file that was working and stopped working is rejected.
+if command -v pacman-conf >/dev/null 2>&1; then
+    if pacman-conf --config "$pacmanConf" >/dev/null 2>&1 \
+        && ! pacman-conf --config "$workFile" >/dev/null 2>&1; then
+        echo "add-biglinux-stable-repo: the generated configuration was rejected by pacman-conf. Keeping $pacmanConf unchanged."
+        rm -f "$workFile"
+        exit 0
+    fi
+fi
+
+# Keep the first backup only: on a second run this file still holds the
+# configuration from before any of this ran.
+if [ ! -f "${pacmanConf}.bak" ]; then
+    cp -a "$pacmanConf" "${pacmanConf}.bak" 2>/dev/null
+fi
+
+if mv -f "$workFile" "$pacmanConf" 2>/dev/null; then
+    echo "add-biglinux-stable-repo: added [${repoName}] to $pacmanConf"
+else
+    rm -f "$workFile"
+fi
+
+exit 0

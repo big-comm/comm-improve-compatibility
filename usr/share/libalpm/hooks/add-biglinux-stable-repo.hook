@@ -1,0 +1,10 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = comm-improve-compatibility
+
+[Action]
+Description = Add the BigLinux stable repository to pacman.conf when missing
+Exec = /usr/share/libalpm/scripts/add-biglinux-stable-repo
+When = PostTransaction
