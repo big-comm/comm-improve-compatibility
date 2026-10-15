@@ -9,6 +9,7 @@ The `comm-improve-compatibility` is a utility package that brings together vario
 ## 🔧 Features
 
 - Custom hooks for system integration
+- USB sticks and external disks keep working after a kernel upgrade, until the reboot (`kernel-modules-hook`)
 - Optimization and compatibility scripts
 - Optimized default configurations
 - System adjustments for better performance
