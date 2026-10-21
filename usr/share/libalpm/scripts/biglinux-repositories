@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+
+# Move a BigCommunity system to the new BigLinux repositories
+# (packages.biglinux.com.br) and keep them there.
+#
+# The old repository (repo.biglinux.com.br) is being retired. On every upgrade of
+# comm-improve-compatibility this script:
+#
+#   1. trusts the new BigLinux signing key, shipped with this package (the
+#      packages of the new repository are signed with it, and the biglinux-keyring
+#      of the old repository does not have it). The key is trusted because this
+#      package itself is signed by the BigCommunity key;
+#   2. removes the BigLinux sections that point at the old repository:
+#      [biglinux-update-stable], and [biglinux-stable]/[biglinux-testing] whose
+#      Server is repo.biglinux.com.br;
+#   3. adds, when missing:
+#        [biglinux-priority]  above Manjaro's [core] (BigLinux builds of packages
+#                             Manjaro also has, so it has to win);
+#        [biglinux-testing]   only on systems that had BigLinux testing enabled;
+#        [biglinux-stable]
+#        [biglinux-extra]     (AUR and third-party packages BigLinux builds)
+#      the last three where the old [biglinux-stable] was, or at the end;
+#   4. removes the menu entries the old rustdesk-bin copied by hand into
+#      /usr/share/applications. No package owns them, and the rustdesk-bin of the
+#      new repository ships files at those paths, so pacman would refuse the
+#      upgrade with "exists in filesystem". They come back with that upgrade.
+#
+# BigCommunity ISOs built from March 2026 shipped without [biglinux-stable]; this
+# also gives those systems the repositories their BigLinux packages update from.
+#
+# Nothing else is touched: sections with another server (a mirror of one's own),
+# commented-out sections (someone disabled them on purpose) and every other line
+# stay as they are. Running it again changes nothing. A backup is kept and the
+# file is replaced atomically only after pacman itself accepts the result.
+
+pacmanConf="${PACMAN_CONF:-/etc/pacman.conf}"
+newHost="https://packages.biglinux.com.br"
+oldHost="repo.biglinux.com.br"
+keyFile="${BIGLINUX_KEY_FILE:-/usr/share/comm-improve-compatibility/biglinux-packages-key.asc}"
+keyFingerprint="F7EB9C2849EFFEFF05789738047C6A782618D2CA"
+
+# Never fail the transaction: a package upgrade must not abort because this
+# convenience could not run.
+trap 'exit 0' ERR
+
+log() { echo "biglinux-repositories: $*"; }
+
+trust_new_key() {
+    [ -n "${SKIP_KEY:-}" ] && return 0
+    command -v pacman-key >/dev/null 2>&1 || return 0
+    if pacman-key --list-keys "$keyFingerprint" >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ ! -r "$keyFile" ]; then
+        log "$keyFile not found; the new BigLinux key was not added."
+        return 0
+    fi
+    if pacman-key --add "$keyFile" >/dev/null 2>&1 \
+        && pacman-key --lsign-key "$keyFingerprint" >/dev/null 2>&1; then
+        log "trusted the BigLinux signing key $keyFingerprint"
+    else
+        log "could not add the BigLinux signing key $keyFingerprint"
+    fi
+}
+
+remove_rustdesk_leftovers() {
+    local root="${ROOT_DIR:-}" name file
+    for name in rustdesk.desktop rustdesk-link.desktop; do
+        file="$root/usr/share/applications/$name"
+        [ -f "$file" ] || continue
+        # Only the copy the old install script made: the installed rustdesk-bin is
+        # the old one (it keeps the original in /usr/share/rustdesk/files) and no
+        # package owns the copy. The content is not compared: BigLinux hooks
+        # rewrite these entries (translated names, extra actions) after the copy.
+        [ -f "$root/usr/share/rustdesk/files/$name" ] || continue
+        if [ -z "${SKIP_OWNER_CHECK:-}" ]; then
+            [ "$(pacman -Qqo "/usr/share/rustdesk/files/$name" 2>/dev/null)" = "rustdesk-bin" ] || continue
+            pacman -Qqo "$file" >/dev/null 2>&1 && continue
+        fi
+        rm -f "$file" && log "removed $file left behind by the old rustdesk-bin"
+    done
+}
+
+trust_new_key
+remove_rustdesk_leftovers
+
+if [ ! -f "$pacmanConf" ]; then
+    log "$pacmanConf not found. Skipping."
+    exit 0
+fi
+if [ ! -w "$pacmanConf" ]; then
+    log "$pacmanConf is not writable. Skipping."
+    exit 0
+fi
+
+# Write through a copy in the same directory, so the final replace is a rename on
+# one filesystem rather than a partially written file.
+workFile="$(mktemp "${pacmanConf}.biglinux-XXXXXX" 2>/dev/null)" || exit 0
+
+# One pass to learn what is there, one to write. Sections are delimited by their
+# [header]; a section's lines (including comments right after it) belong to it.
+awk -v old="$oldHost" -v new="$newHost" '
+function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+function header(line,   h) {
+    h = trim(line)
+    if (h ~ /^\[[^]]+\]$/) return substr(h, 2, length(h) - 2)
+    return ""
+}
+function block(name, path) {
+    return sprintf("[%s]\nSigLevel = PackageRequired\nServer = %s/%s/$arch\n\n", name, new, path)
+}
+FNR == NR {
+    h = header($0)
+    if (h != "") { cur = h; count[cur]++; next }
+    if (cur != "" && trim($0) ~ /^Server[ \t]*=/ && index($0, old) > 0) oldserver[cur] = 1
+    next
+}
+FNR == 1 {
+    # What to drop: the old repository only. What to add: what is missing.
+    drop["biglinux-update-stable"] = ("biglinux-update-stable" in count)
+    drop["biglinux-stable"] = ("biglinux-stable" in oldserver)
+    drop["biglinux-testing"] = ("biglinux-testing" in oldserver)
+    hadtesting = ("biglinux-testing" in count)
+    need["biglinux-priority"] = !("biglinux-priority" in count)
+    need["biglinux-testing"] = hadtesting && (drop["biglinux-testing"] || !("biglinux-testing" in count))
+    need["biglinux-stable"] = drop["biglinux-stable"] || !("biglinux-stable" in count)
+    need["biglinux-extra"] = !("biglinux-extra" in count)
+    tail = ""
+    if (need["biglinux-testing"]) tail = tail block("biglinux-testing", "testing")
+    if (need["biglinux-stable"]) tail = tail block("biglinux-stable", "stable")
+    if (need["biglinux-extra"]) tail = tail block("biglinux-extra", "extra")
+    skip = 0
+}
+{
+    h = header($0)
+    if (h != "") {
+        skip = (h in drop) && drop[h]
+        if (h == "core" && need["biglinux-priority"] && !priority_done) {
+            printf "%s", block("biglinux-priority", "priority"); priority_done = 1
+        }
+        if ((h == "biglinux-stable" || h == "biglinux-testing") && skip && tail != "") {
+            printf "%s", tail; tail = ""
+        }
+    }
+    if (!skip) print
+}
+END {
+    if (need["biglinux-priority"] && !priority_done) printf "\n%s", block("biglinux-priority", "priority")
+    if (tail != "") printf "\n%s", tail
+}' "$pacmanConf" "$pacmanConf" >"$workFile" || { rm -f "$workFile"; exit 0; }
+
+# Plain bash, not cmp: a minimal install does not have diffutils.
+if [ "$(cat "$pacmanConf")" = "$(cat "$workFile")" ]; then
+    rm -f "$workFile"
+    exit 0
+fi
+
+# Let pacman judge its own configuration before this file becomes the real one.
+# What matters is whether this edit broke anything, not whether the file was
+# already perfect: a pacman.conf pacman already complains about is still a system
+# that needs the repositories, so only a file that worked and stopped working is
+# rejected.
+if command -v pacman-conf >/dev/null 2>&1; then
+    if pacman-conf --config "$pacmanConf" >/dev/null 2>&1 \
+        && ! pacman-conf --config "$workFile" >/dev/null 2>&1; then
+        log "the generated configuration was rejected by pacman-conf. Keeping $pacmanConf unchanged."
+        rm -f "$workFile"
+        exit 0
+    fi
+fi
+
+# Keep the configuration from before this migration: a later run must not
+# overwrite it with an already migrated file.
+backup="${pacmanConf}.bak-biglinux-repos"
+[ -f "$backup" ] || cp -a "$pacmanConf" "$backup" 2>/dev/null
+
+chmod --reference="$pacmanConf" "$workFile" 2>/dev/null
+if mv -f "$workFile" "$pacmanConf" 2>/dev/null; then
+    log "BigLinux repositories now come from $newHost (backup: $backup)"
+else
+    rm -f "$workFile"
+fi
+
+exit 0

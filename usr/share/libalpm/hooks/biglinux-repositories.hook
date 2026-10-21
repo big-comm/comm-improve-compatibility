@@ -1,0 +1,10 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = comm-improve-compatibility
+
+[Action]
+Description = Move pacman.conf to the new BigLinux repositories (packages.biglinux.com.br)
+Exec = /usr/share/libalpm/scripts/biglinux-repositories
+When = PostTransaction
