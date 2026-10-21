@@ -112,9 +112,25 @@ for repo in priority testing stable extra; do
     [ -f "$mirrorlistDir/biglinux-$repo-mirrorlist" ] && mirrorlists="$mirrorlists $repo"
 done
 
+# Include files that open a section of their own (a [name] line inside, as in
+# Include = /etc/pacman.d/openai-chatgpt.conf). pacman reads them in place, so the
+# lines from there on belong to that section, not to the one written above the
+# Include. One per line; pacman expands globs in Include, so does this.
+sectionIncludes=""
+while IFS= read -r inc; do
+    for file in $inc; do
+        if [ -f "$file" ] && grep -qE '^[[:space:]]*\[[^]]+\][[:space:]]*$' "$file"; then
+            sectionIncludes="$sectionIncludes$inc
+"
+            break
+        fi
+    done
+done < <(sed -nE 's/^[[:space:]]*Include[[:space:]]*=[[:space:]]*//p' "$pacmanConf" | sed -E 's/[[:space:]]+$//' | sort -u)
+
 # One pass to learn what is there, one to write. Sections are delimited by their
 # [header]; a section's lines (including comments right after it) belong to it.
-awk -v old="$oldHost" -v new="$newHost" -v dir="$mirrorlistDir" -v lists="$mirrorlists" '
+awk -v old="$oldHost" -v new="$newHost" -v dir="$mirrorlistDir" -v lists="$mirrorlists" \
+    -v sectionincludes="$sectionIncludes" '
 # Whitespace as pacman sees it (isspace): a line pasted from elsewhere may end in
 # a carriage return, which pacman ignores and so must this.
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
@@ -144,10 +160,13 @@ BEGIN {
     for (i = 1; i <= n; i++) mirrorlist[l[i]] = 1
     split("biglinux-priority biglinux-testing biglinux-stable biglinux-extra", names, " ")
     for (i in names) ours[names[i]] = 1
+    n = split(sectionincludes, l, "\n")
+    for (i = 1; i <= n; i++) if (l[i] != "") opens[l[i]] = 1
 }
 FNR == NR {
     h = header($0)
     if (h != "") { cur = h; count[cur]++; next }
+    if (value($0, "Include") in opens) { cur = "Include " value($0, "Include"); next }
     if (cur == "") next
     srv = value($0, "Server"); inc = value($0, "Include")
     if (srv != "" && index(srv, old) > 0) oldserver[cur] = 1
@@ -190,6 +209,12 @@ FNR == 1 {
         if ((h == "biglinux-stable" || h == "biglinux-testing") && skip && tail != "") {
             printf "%s", tail; tail = ""
         }
+    }
+    # An Include that opens its own section ends the one above it.
+    if (h == "" && (value($0, "Include") in opens)) {
+        cur = "Include " value($0, "Include"); skip = 0
+        print
+        next
     }
     # A dropped section loses its own lines; comments that follow it (often the
     # example blocks of the default pacman.conf) are kept.
