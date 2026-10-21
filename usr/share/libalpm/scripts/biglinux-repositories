@@ -115,7 +115,9 @@ done
 # One pass to learn what is there, one to write. Sections are delimited by their
 # [header]; a section's lines (including comments right after it) belong to it.
 awk -v old="$oldHost" -v new="$newHost" -v dir="$mirrorlistDir" -v lists="$mirrorlists" '
-function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+# Whitespace as pacman sees it (isspace): a line pasted from elsewhere may end in
+# a carriage return, which pacman ignores and so must this.
+function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
 function header(line,   h) {
     h = trim(line)
     if (h ~ /^\[[^]]+\]$/) return substr(h, 2, length(h) - 2)
@@ -124,7 +126,7 @@ function header(line,   h) {
 # "key = value" with any spacing, or "" when the line is not that key.
 function value(line, key,   l) {
     l = trim(line)
-    if (l !~ ("^" key "[ \t]*=")) return ""
+    if (l !~ ("^" key "[[:space:]]*=")) return ""
     sub(/^[^=]*=/, "", l)
     return trim(l)
 }
