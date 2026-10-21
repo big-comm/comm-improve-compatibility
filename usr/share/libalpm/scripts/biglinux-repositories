@@ -3,8 +3,8 @@
 # Move a BigCommunity system to the new BigLinux repositories
 # (packages.biglinux.com.br) and keep them there.
 #
-# The old repository (repo.biglinux.com.br) is being retired. On every upgrade of
-# comm-improve-compatibility this script:
+# The old repository (repo.biglinux.com.br) is being retired. On every install or
+# upgrade of comm-improve-compatibility and of biglinux-mirrorlist this script:
 #
 #   1. trusts the new BigLinux signing key, shipped with this package (the
 #      packages of the new repository are signed with it, and the biglinux-keyring
@@ -20,7 +20,15 @@
 #        [biglinux-stable]
 #        [biglinux-extra]     (AUR and third-party packages BigLinux builds)
 #      the last three where the old [biglinux-stable] was, or at the end;
-#   4. removes the menu entries the old rustdesk-bin copied by hand into
+#      each one reads its servers from the biglinux-mirrorlist package
+#      (Include = /etc/pacman.d/biglinux-<repo>-mirrorlist). The first move
+#      happens before that package can be installed (it is only in the new
+#      repository) and an Include of a missing file breaks pacman, so until then
+#      the section gets the plain Server line instead;
+#   4. once the mirrorlist is there, turns those plain Server lines into the
+#      Include (biglinux-keyring depends on biglinux-mirrorlist, so the first
+#      upgrade from the new repository installs it and runs this again);
+#   5. removes the menu entries the old rustdesk-bin copied by hand into
 #      /usr/share/applications. No package owns them, and the rustdesk-bin of the
 #      new repository ships files at those paths, so pacman would refuse the
 #      upgrade with "exists in filesystem". They come back with that upgrade.
@@ -38,6 +46,7 @@ newHost="https://packages.biglinux.com.br"
 oldHost="repo.biglinux.com.br"
 keyFile="${BIGLINUX_KEY_FILE:-/usr/share/comm-improve-compatibility/biglinux-packages-key.asc}"
 keyFingerprint="F7EB9C2849EFFEFF05789738047C6A782618D2CA"
+mirrorlistDir="${MIRRORLIST_DIR:-/etc/pacman.d}"
 
 # Never fail the transaction: a package upgrade must not abort because this
 # convenience could not run.
@@ -97,25 +106,62 @@ fi
 # one filesystem rather than a partially written file.
 workFile="$(mktemp "${pacmanConf}.biglinux-XXXXXX" 2>/dev/null)" || exit 0
 
+# The repositories whose mirrorlist is installed; only those can use Include.
+mirrorlists=""
+for repo in priority testing stable extra; do
+    [ -f "$mirrorlistDir/biglinux-$repo-mirrorlist" ] && mirrorlists="$mirrorlists $repo"
+done
+
 # One pass to learn what is there, one to write. Sections are delimited by their
 # [header]; a section's lines (including comments right after it) belong to it.
-awk -v old="$oldHost" -v new="$newHost" '
+awk -v old="$oldHost" -v new="$newHost" -v dir="$mirrorlistDir" -v lists="$mirrorlists" '
 function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 function header(line,   h) {
     h = trim(line)
     if (h ~ /^\[[^]]+\]$/) return substr(h, 2, length(h) - 2)
     return ""
 }
-function block(name, path) {
-    return sprintf("[%s]\nSigLevel = PackageRequired\nServer = %s/%s/$arch\n\n", name, new, path)
+# "key = value" with any spacing, or "" when the line is not that key.
+function value(line, key,   l) {
+    l = trim(line)
+    if (l !~ ("^" key "[ \t]*=")) return ""
+    sub(/^[^=]*=/, "", l)
+    return trim(l)
+}
+function repo(name) { return substr(name, length("biglinux-") + 1) }
+function servers(name) {
+    if (repo(name) in mirrorlist)
+        return sprintf("Include = %s/biglinux-%s-mirrorlist", dir, repo(name))
+    return sprintf("Server = %s/%s/$arch", new, repo(name))
+}
+function block(name) {
+    return sprintf("[%s]\nSigLevel = PackageRequired\n%s\n\n", name, servers(name))
+}
+BEGIN {
+    n = split(lists, l, " ")
+    for (i = 1; i <= n; i++) mirrorlist[l[i]] = 1
+    split("biglinux-priority biglinux-testing biglinux-stable biglinux-extra", names, " ")
+    for (i in names) ours[names[i]] = 1
 }
 FNR == NR {
     h = header($0)
     if (h != "") { cur = h; count[cur]++; next }
-    if (cur != "" && trim($0) ~ /^Server[ \t]*=/ && index($0, old) > 0) oldserver[cur] = 1
+    if (cur == "") next
+    srv = value($0, "Server"); inc = value($0, "Include")
+    if (srv != "" && index(srv, old) > 0) oldserver[cur] = 1
+    # A section this script wrote with a plain Server line: exactly that one
+    # line and nothing else to take servers from. Anything else (a mirror of
+    # ones own, more servers, an Include already) is left alone.
+    if (srv != "" || inc != "") {
+        nsrc[cur]++
+        if (srv == new "/" repo(cur) "/$arch") plain[cur] = 1
+    }
     next
 }
 FNR == 1 {
+    cur = ""
+    for (h in ours)
+        upgrade[h] = (h in plain) && nsrc[h] == 1 && count[h] == 1 && (repo(h) in mirrorlist)
     # What to drop: the old repository only. What to add: what is missing.
     drop["biglinux-update-stable"] = ("biglinux-update-stable" in count)
     drop["biglinux-stable"] = ("biglinux-stable" in oldserver)
@@ -126,26 +172,34 @@ FNR == 1 {
     need["biglinux-stable"] = drop["biglinux-stable"] || !("biglinux-stable" in count)
     need["biglinux-extra"] = !("biglinux-extra" in count)
     tail = ""
-    if (need["biglinux-testing"]) tail = tail block("biglinux-testing", "testing")
-    if (need["biglinux-stable"]) tail = tail block("biglinux-stable", "stable")
-    if (need["biglinux-extra"]) tail = tail block("biglinux-extra", "extra")
+    if (need["biglinux-testing"]) tail = tail block("biglinux-testing")
+    if (need["biglinux-stable"]) tail = tail block("biglinux-stable")
+    if (need["biglinux-extra"]) tail = tail block("biglinux-extra")
     skip = 0
 }
 {
     h = header($0)
     if (h != "") {
+        cur = h
         skip = (h in drop) && drop[h]
         if (h == "core" && need["biglinux-priority"] && !priority_done) {
-            printf "%s", block("biglinux-priority", "priority"); priority_done = 1
+            printf "%s", block("biglinux-priority"); priority_done = 1
         }
         if ((h == "biglinux-stable" || h == "biglinux-testing") && skip && tail != "") {
             printf "%s", tail; tail = ""
         }
     }
-    if (!skip) print
+    # A dropped section loses its own lines; comments that follow it (often the
+    # example blocks of the default pacman.conf) are kept.
+    if (skip && trim($0) !~ /^#/) next
+    if (h == "" && (cur in upgrade) && upgrade[cur] && value($0, "Server") != "") {
+        print servers(cur)
+        next
+    }
+    print
 }
 END {
-    if (need["biglinux-priority"] && !priority_done) printf "\n%s", block("biglinux-priority", "priority")
+    if (need["biglinux-priority"] && !priority_done) printf "\n%s", block("biglinux-priority")
     if (tail != "") printf "\n%s", tail
 }' "$pacmanConf" "$pacmanConf" >"$workFile" || { rm -f "$workFile"; exit 0; }
 
@@ -176,7 +230,7 @@ backup="${pacmanConf}.bak-biglinux-repos"
 
 chmod --reference="$pacmanConf" "$workFile" 2>/dev/null
 if mv -f "$workFile" "$pacmanConf" 2>/dev/null; then
-    log "BigLinux repositories now come from $newHost (backup: $backup)"
+    log "pacman.conf updated for the BigLinux repositories at $newHost (backup: $backup)"
 else
     rm -f "$workFile"
 fi
