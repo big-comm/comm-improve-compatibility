@@ -3,9 +3,8 @@ Type = Package
 Operation = Install
 Operation = Upgrade
 Target = comm-improve-compatibility
-Target = biglinux-mirrorlist
 
 [Action]
-Description = Move pacman.conf to the new BigLinux repositories (packages.biglinux.com.br)
+Description = Keep pacman.conf on the BigLinux and BigCommunity repositories ($repo/$arch)
 Exec = /usr/share/libalpm/scripts/biglinux-repositories
 When = PostTransaction
