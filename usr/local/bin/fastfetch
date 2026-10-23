@@ -1,48 +1,89 @@
 #!/bin/bash
 # Wrapper do fastfetch da BigCommunity.
 #
-#  - usa o ASCII art da distro (o do usuário, se existir);
+#  - usa o config e o ASCII art da distro, ou os do usuário em
+#    ~/.config/fastfetch, se ele os personalizou;
 #  - traduz os rótulos dos módulos para o idioma do usuário, conforme
-#    /etc/fastfetch/labels.tsv, com fallback para inglês.
+#    /etc/fastfetch/labels.tsv, com fallback para inglês;
+#  - em terminal estreito demais para logo + painel, mostra só o painel.
 #
-# O config traduzido é gerado em cache e só é refeito quando o config de
-# origem ou a tabela de rótulos mudam.
+# O config traduzido fica em cache, identificado pelo conteúdo do config,
+# da tabela de rótulos e do tradutor: qualquer mudança gera um novo.
 
 readonly SYS_DIR='/etc/fastfetch'
+readonly SKEL_DIR='/etc/skel/.config/fastfetch'
 readonly LABELS="$SYS_DIR/labels.tsv"
 readonly TRANSLATOR="$SYS_DIR/translate-labels.awk"
 
-ascii="$HOME/.config/fastfetch/ascii-art"
-[[ -f $ascii ]] || ascii="$SYS_DIR/ascii-art"
+# O comm-skel copia um config e um ASCII art padrão para ~/.config/fastfetch
+# de cada usuário novo. Uma cópia intocada não é personalização: se valesse,
+# ninguém veria um padrão novo da distro. Valem como intocadas as cópias
+# iguais ao /etc/skel atual e as versões que o comm-skel já distribuiu
+# (sha256).
+readonly SKEL_SUMS=(
+    4a3fad55323a5fb4b189a12c7cb32403668df9f508314b03cc9668b4b215debc # config.jsonc 16dcd5c
+    cf6b5ae9caeacb417b43230ecc7f656874dadf0e63918104e27a158f78e5d492 # config.jsonc e97f65e
+    cba05125579e501daa066a678b22f887f0b89b40f8235a8d2a084265816b3794 # config.jsonc fc781eb
+    e068f03f624895f2498671627c673bb8d331b43a2c8db1e55a5d74390e5f5bd7 # ascii-art 16dcd5c
+    a1b177c76fb6a973783bf9722a9ab7a8d8b8383f549ab72f8b5cbfa1216bd381 # ascii-art e97f65e
+)
 
-config="$HOME/.config/fastfetch/config.jsonc"
-[[ -f $config ]] || config="$SYS_DIR/config.jsonc"
+skel_copy() {
+    local file=$1 sum
+    [[ -f $SKEL_DIR/${file##*/} ]] && cmp -s "$file" "$SKEL_DIR/${file##*/}" && return 0
+    sum=$(sha256sum <"$file" 2>/dev/null) || return 1
+    [[ " ${SKEL_SUMS[*]} " == *" ${sum%% *} "* ]]
+}
 
-# Idioma do usuário: pt_BR.UTF-8 -> pt. Sem locale definido, inglês.
-lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
-lang="${lang%%.*}"
-lang="${lang%%@*}"
-lang="${lang%%_*}"
+pick() {
+    local user="$HOME/.config/fastfetch/$1"
+    if [[ -f $user ]] && ! skel_copy "$user"; then
+        printf '%s' "$user"
+    else
+        printf '%s' "$SYS_DIR/$1"
+    fi
+}
+
+ascii=$(pick ascii-art)
+config=$(pick config.jsonc)
+
+# Idioma do usuário: zh_TW.UTF-8 -> zh_TW, se a tabela tiver a variante
+# regional; senão, só o idioma (pt_BR.UTF-8 -> pt). Sem locale, inglês.
+locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+locale="${locale%%.*}"
+locale="${locale%%@*}"
+lang="${locale%%_*}"
 lang="${lang,,}"
+if [[ $locale == *_* ]] && grep -q "^${locale}"$'\t' "$LABELS" 2>/dev/null; then
+    lang=$locale
+fi
 [[ -z $lang || $lang == c || $lang == posix ]] && lang='en'
 
 translate() {
     local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/fastfetch"
-    local out="$cache_dir/config.$lang.jsonc"
+    local key out tmp
 
     [[ -f $LABELS && -f $TRANSLATOR && -f $config ]] || return 1
 
-    if [[ -s $out && ! $config -nt $out && ! $LABELS -nt $out ]]; then
+    # Pelo conteúdo, não pela data: o pacote instala arquivos com a data em
+    # que foi compilado, que pode ser anterior a um cache já existente.
+    key=$(cat "$config" "$LABELS" "$TRANSLATOR" | cksum) || return 1
+    key=${key%% *}
+    out="$cache_dir/config.$lang.$key.jsonc"
+
+    if [[ -s $out ]]; then
         printf '%s' "$out"
         return 0
     fi
 
     mkdir -p "$cache_dir" 2>/dev/null || return 1
-    local tmp
     tmp=$(mktemp "$out.XXXXXX" 2>/dev/null) || return 1
 
     if awk -v lang="$lang" -f "$TRANSLATOR" "$LABELS" "$config" >"$tmp" &&
         [[ -s $tmp ]] && mv -f "$tmp" "$out"; then
+        # Caches anteriores deste idioma não servem mais.
+        find "$cache_dir" -maxdepth 1 -name "config.$lang.*jsonc" ! -name "${out##*/}" \
+            -delete 2>/dev/null
         printf '%s' "$out"
         return 0
     fi
@@ -51,9 +92,22 @@ translate() {
     return 1
 }
 
+# Terminal estreito: sem a logo, o painel cabe inteiro. A largura que o
+# painel precisa, além da logo, vem do próprio config ("// side-columns: N").
+narrow=()
+if [[ -t 1 ]]; then
+    side=$(sed -n 's|^// side-columns: \([0-9]*\)$|\1|p' "$config" 2>/dev/null)
+    cols=$(tput cols 2>/dev/null)
+    if [[ $side && $cols ]]; then
+        logo=$(sed 's/\x1b\[[0-9;]*m//g' "$ascii" 2>/dev/null |
+            LC_ALL=C.UTF-8 awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')
+        (( cols < logo + side )) && narrow=(--logo none)
+    fi
+fi
+
 if translated=$(translate); then
-    exec /usr/bin/fastfetch --config "$translated" --file-raw "$ascii" "$@"
+    exec /usr/bin/fastfetch --config "$translated" --file-raw "$ascii" "${narrow[@]}" "$@"
 fi
 
 # Fallback: config original, sem tradução.
-exec /usr/bin/fastfetch --key-width 15 --config "$config" --file-raw "$ascii" "$@"
+exec /usr/bin/fastfetch --key-width 15 --config "$config" --file-raw "$ascii" "${narrow[@]}" "$@"
