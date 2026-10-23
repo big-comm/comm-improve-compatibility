@@ -5,7 +5,8 @@
 #    ~/.config/fastfetch, se ele os personalizou;
 #  - traduz os rótulos dos módulos para o idioma do usuário, conforme
 #    /etc/fastfetch/labels.tsv, com fallback para inglês;
-#  - em terminal estreito demais para logo + painel, mostra só o painel.
+#  - escolhe o layout pela largura do terminal: normal, compacto (80
+#    colunas, com a logo) ou compacto sem a logo.
 #
 # O config traduzido fica em cache, identificado pelo conteúdo do config,
 # da tabela de rótulos e do tradutor: qualquer mudança gera um novo.
@@ -69,7 +70,9 @@ translate() {
     # que foi compilado, que pode ser anterior a um cache já existente.
     key=$(cat "$config" "$LABELS" "$TRANSLATOR" | cksum) || return 1
     key=${key%% *}
-    out="$cache_dir/config.$lang.$key.jsonc"
+    local name=${config##*/}
+    name=${name%.jsonc}
+    out="$cache_dir/$name.$lang.$key.jsonc"
 
     if [[ -s $out ]]; then
         printf '%s' "$out"
@@ -82,7 +85,7 @@ translate() {
     if awk -v lang="$lang" -f "$TRANSLATOR" "$LABELS" "$config" >"$tmp" &&
         [[ -s $tmp ]] && mv -f "$tmp" "$out"; then
         # Caches anteriores deste idioma não servem mais.
-        find "$cache_dir" -maxdepth 1 -name "config.$lang.*jsonc" ! -name "${out##*/}" \
+        find "$cache_dir" -maxdepth 1 -name "$name.$lang.*jsonc" ! -name "${out##*/}" \
             -delete 2>/dev/null
         printf '%s' "$out"
         return 0
@@ -92,17 +95,24 @@ translate() {
     return 1
 }
 
-# Terminal estreito: sem a logo, o painel cabe inteiro. A largura que o
-# painel precisa, além da logo, vem do próprio config ("// side-columns: N").
+# Largura: o config da distro tem duas versões, a normal e a compacta, que
+# cabe em 80 colunas com a logo. Cada uma diz, em "// side-columns: N",
+# quantas colunas precisa além da logo. Usa a normal se couber; senão, a
+# compacta; abaixo disso, a compacta sem a logo. Um config do usuário é
+# usado como está, só sem a logo se não couber.
 narrow=()
-if [[ -t 1 ]]; then
-    side=$(sed -n 's|^// side-columns: \([0-9]*\)$|\1|p' "$config" 2>/dev/null)
-    cols=$(tput cols 2>/dev/null)
-    if [[ $side && $cols ]]; then
-        logo=$(sed 's/\x1b\[[0-9;]*m//g' "$ascii" 2>/dev/null |
-            LC_ALL=C.UTF-8 awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')
-        (( cols < logo + side )) && narrow=(--logo none)
+if [[ -t 1 ]] && cols=$(tput cols 2>/dev/null) && [[ $cols ]]; then
+    side() { sed -n 's|^// side-columns: \([0-9]*\)$|\1|p' "$1" 2>/dev/null; }
+    logo=$(sed 's/\x1b\[[0-9;]*m//g' "$ascii" 2>/dev/null |
+        LC_ALL=C.UTF-8 awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')
+    compact="$SYS_DIR/config-compact.jsonc"
+    wide=$(side "$config")
+    if [[ $config == "$SYS_DIR/config.jsonc" && -f $compact ]] &&
+        [[ $wide ]] && (( cols < logo + wide )); then
+        config=$compact
+        wide=$(side "$config")
     fi
+    [[ $wide ]] && (( cols < logo + wide )) && narrow=(--logo none)
 fi
 
 if translated=$(translate); then
