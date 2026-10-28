@@ -28,7 +28,17 @@ function register(cell, column,   w) {
     column_of[w] = column
 }
 
-BEGIN { FS = "\t" }
+# Colunas ocupadas no terminal. Ideogramas, kana, hangul e formas de largura
+# total ocupam duas. Só é possível distinguir caracteres com o awk em locale
+# UTF-8; fora dele, length() conta bytes (3 por ideograma), o que
+# superestima a largura, mas nunca a subestima.
+function columns(s,   n) {
+    if (!UTF8) return length(s)
+    n = gsub(/[ᄀ-ᅟ⺀-〾ぁ-㉇㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︐-︙︰-﹫！-｠￠-￦]/, "&", s)
+    return length(s) + n
+}
+
+BEGIN { FS = "\t"; UTF8 = (length("é") == 1) }
 
 # 1ª passagem: tabela de rótulos.
 NR == FNR {
@@ -58,29 +68,37 @@ NR == FNR {
         tail = substr($0, RSTART + RLENGTH)
 
         if (lastword(seg) != "") {
-            key = column_of[tolower(substr(seg, LW_POS, LW_LEN))]
-            if (key != "" && label[key] != "")
-                seg = substr(seg, 1, LW_POS - 1) label[key] \
-                      substr(seg, LW_POS + LW_LEN)
+            word = substr(seg, LW_POS, LW_LEN)
+            key = column_of[tolower(word)]
+            if (key != "" && label[key] != "") {
+                # Rótulo em minúsculas no config continua em minúsculas.
+                tr = (word == tolower(word)) ? tolower(label[key]) : label[key]
+                seg = substr(seg, 1, LW_POS - 1) tr substr(seg, LW_POS + LW_LEN)
+            }
         }
 
         # Largura da chave, sem as aspas e sem espaços de alinhamento.
+        text = ""
         if (match(seg, /"[^"]*"/)) {
             text = substr(seg, RSTART + 1, RLENGTH - 2)
+            gsub(/\{#[^}]*\}/, "", text)        # cores ({#...}) não ocupam coluna
+            gsub(/\\u001b(\[[0-9;]*)?[0-9A-Za-z]/, "", text)  # escapes (\u001b7, \u001b[K...)
+            gsub(/[─ ]+$/, "", text)            # traço de divisória ("├─ hardware ───")
             gsub(/\{[a-z0-9-]+\}/, "x", text)   # {icon} vira um caractere
             gsub(/[ \t]+$/, "", text)
-            if (length(text) > key_width) key_width = length(text)
+            if (columns(text) > key_width) key_width = columns(text)
         }
 
         $0 = head seg tail
-        is_key[n + 1] = 1
+        # Chave vazia (só cor, como "{#}"): linha sem rótulo, não alinhada.
+        is_key[n + 1] = (text != "")
     }
 
     line[++n] = $0
 }
 
 END {
-    if (key_width > 0) key_width += 2   # respiro antes do separador
+    if (key_width > 0) key_width += 4   # três colunas de respiro até o valor
     for (i = 1; i <= n; i++) {
         # keyWidth é propriedade de módulo; entra antes da "key", posição
         # sempre válida (a pontuação da linha original é preservada).

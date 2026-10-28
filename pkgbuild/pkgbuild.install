@@ -80,3 +80,25 @@ printMsg() {
 #     # printMsg "If you want to remove all user data, run:"
 #     # printMsg "rm -rf /home/*/mypackage_data"
 # }
+
+# Braille for the fastfetch owl: 76-bigcommunity-braille.conf takes braille
+# away from DejaVu Sans when fontconfig scans it, and fontconfig keeps scan
+# results in its cache until the folder changes. Rescan DejaVu's folder so
+# the rule takes effect, or stops, right away.
+refresh_braille_fonts() {
+    local dir=/usr/share/fonts/TTF
+    [[ -d $dir ]] && fc-cache -f "$dir" >/dev/null 2>&1
+    return 0
+}
+
+post_install() {
+    refresh_braille_fonts
+}
+
+post_upgrade() {
+    refresh_braille_fonts
+}
+
+post_remove() {
+    refresh_braille_fonts
+}
