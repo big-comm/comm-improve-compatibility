@@ -1,0 +1,10 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = comm-improve-compatibility
+
+[Action]
+Description = Reinstall the GRUB boot loader once with install-grub
+Exec = /usr/share/libalpm/scripts/install-grub-once
+When = PostTransaction

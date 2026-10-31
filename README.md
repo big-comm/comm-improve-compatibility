@@ -10,7 +10,7 @@ The `comm-improve-compatibility` is a utility package that brings together vario
 
 - Custom hooks for system integration
 - USB sticks and external disks keep working after a kernel upgrade, until the reboot (`kernel-modules-hook`)
-- The GRUB boot loader on disk is reinstalled whenever the `grub` package is upgraded (`install-grub`)
+- The GRUB boot loader on disk is reinstalled whenever the `grub` package is upgraded (`install-grub`), and once on systems that upgraded it before
 - Optimization and compatibility scripts
 - Optimized default configurations
 - System adjustments for better performance

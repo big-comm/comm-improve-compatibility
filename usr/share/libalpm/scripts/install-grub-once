@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Reinstall the GRUB boot loader once, with install-grub.
+#
+# Upgrading the grub package does not rewrite the loader the firmware starts.
+# Systems that upgraded grub before this package depended on install-grub kept
+# an old loader on disk next to new modules in /boot/grub, and install-grub's
+# own hook only runs on the next grub upgrade. This catches them up now; later
+# grub upgrades are handled by 98-install-grub.hook.
+#
+# Nothing is done, and the run is not repeated, when:
+#   - this runs in a chroot (image builds; the installer writes the loader);
+#   - the system does not boot with GRUB;
+#   - Secure Boot is on (an unsigned loader would not start).
+# A failed install-grub is retried on the next upgrade of this package.
+
+root="${ROOT_DIR:-}"
+marker="$root/var/lib/comm-improve-compatibility/install-grub-done"
+installGrub="${INSTALL_GRUB:-/usr/bin/install-grub}"
+secureBootVar="$root/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa8c-00e098cbc137"
+
+[ -e "$marker" ] && exit 0
+
+mark_done() {
+    mkdir -p "${marker%/*}" && : > "$marker"
+}
+
+if systemd-detect-virt --quiet --chroot; then
+    mark_done
+    exit 0
+fi
+
+grubCore=("$root"/boot/grub/*/core.efi "$root"/boot/grub/i386-pc/core.img)
+grubFound=false
+for file in "${grubCore[@]}"; do
+    [ -e "$file" ] && grubFound=true
+done
+if ! $grubFound; then
+    mark_done
+    exit 0
+fi
+
+# The variable holds 4 attribute bytes, then 1 when Secure Boot is enforced.
+if [ -r "$secureBootVar" ] && [ "$(od -An -tu1 -j4 -N1 "$secureBootVar" | tr -d ' ')" = 1 ]; then
+    echo "Secure Boot is on: GRUB was not reinstalled. Reinstall and sign it, then run install-grub."
+    mark_done
+    exit 0
+fi
+
+if [ ! -x "$installGrub" ]; then
+    echo "install-grub is not available; GRUB was not reinstalled."
+    exit 0
+fi
+
+if "$installGrub"; then
+    mark_done
+else
+    echo "install-grub failed; it will be retried on the next update of comm-improve-compatibility."
+fi
+exit 0
