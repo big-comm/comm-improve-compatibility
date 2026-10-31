@@ -3,7 +3,7 @@
 pkgname=comm-improve-compatibility
 pkgdesc="System compatibility hooks and general improvements for BigCommunity"
 # Uncomment and edit the following lines as needed
-depends=('ttf-dejavu' 'kernel-modules-hook')
+depends=('ttf-dejavu' 'kernel-modules-hook' 'install-grub')
 #makedepends=('')
 optdepends=('hplip: for HP printer support')
 #conflicts=('')
